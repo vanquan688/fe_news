@@ -191,7 +191,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { newsService } from '@/services/news.service'
 import { categoryService } from '@/services/category.service'
 
@@ -205,6 +205,7 @@ const submitting = ref(false)
 const error = ref('')
 const searchQuery = ref('')
 const filterCategory = ref('')
+let searchTimeout = null
 
 const formData = ref({
   title: '',
@@ -236,10 +237,22 @@ const loadCategories = async () => {
 }
 
 const handleSearch = () => {
-  loadNews()
+  // Clear timeout cũ nếu có
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
+  
+  // Tạo timeout mới - chỉ gọi API sau 500ms khi người dùng ngừng nhập
+  searchTimeout = setTimeout(() => {
+    loadNews()
+  }, 500)
 }
 
 const handleFilter = () => {
+  // Clear timeout để tránh gọi API không cần thiết khi đổi filter
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
   loadNews()
 }
 
@@ -312,6 +325,13 @@ const truncateText = (text, length) => {
 onMounted(() => {
   loadNews()
   loadCategories()
+})
+
+onBeforeUnmount(() => {
+  // Clear timeout để tránh memory leak
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
 })
 </script>
 

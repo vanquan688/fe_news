@@ -6,10 +6,48 @@
       <p class="hero-subtitle">Khám phá tin tức mới nhất và đáng tin cậy nhất</p>
     </section>
 
+    <!-- Search Box -->
+    <div class="search-section">
+      <div class="search-box">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="11" cy="11" r="8"></circle>
+          <path d="m21 21-4.35-4.35"></path>
+        </svg>
+        <input
+          type="text"
+          v-model="searchQuery"
+          placeholder="Tìm kiếm tin tức theo tiêu đề..."
+          @input="handleSearch"
+        />
+        <button v-if="searchQuery" @click="clearSearch" class="clear-btn">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+
     <!-- Categories Filter -->
     <div class="filter-bar">
       <button
-        @click="selectedCategory = null"
+        @click="selectCategory(null)"
         class="filter-btn"
         :class="{ active: !selectedCategory }"
       >
@@ -18,7 +56,7 @@
       <button
         v-for="cat in categories"
         :key="cat._id"
-        @click="selectedCategory = cat._id"
+        @click="selectCategory(cat._id)"
         class="filter-btn"
         :class="{ active: selectedCategory === cat._id }"
       >
@@ -32,7 +70,7 @@
       <p>Đang tải tin tức...</p>
     </div>
 
-    <div v-else-if="filteredNews.length === 0" class="empty-state">
+    <div v-else-if="newsList.length === 0" class="empty-state">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         width="64"
@@ -50,7 +88,7 @@
 
     <div v-else class="news-grid">
       <article
-        v-for="news in filteredNews"
+        v-for="news in newsList"
         :key="news._id"
         class="news-card"
         @click="viewNews(news._id)"
@@ -109,7 +147,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { newsService } from '@/services/news.service'
 import { categoryService } from '@/services/category.service'
@@ -118,20 +156,26 @@ const router = useRouter()
 const newsList = ref([])
 const categories = ref([])
 const selectedCategory = ref(null)
+const searchQuery = ref('')
 const loading = ref(true)
-
-const filteredNews = computed(() => {
-  if (!selectedCategory.value) return newsList.value
-  return newsList.value.filter(
-    (news) =>
-      news.category?._id === selectedCategory.value || news.category === selectedCategory.value,
-  )
-})
+let searchTimeout = null
 
 const loadNews = async () => {
   try {
     loading.value = true
-    newsList.value = await newsService.getAllNews()
+    const params = {}
+    
+    // Add search parameter
+    if (searchQuery.value) {
+      params.search = searchQuery.value
+    }
+    
+    // Add category filter parameter
+    if (selectedCategory.value) {
+      params.category = selectedCategory.value
+    }
+    
+    newsList.value = await newsService.getAllNews(params)
     console.log('🏠 Total news loaded:', newsList.value.length)
   } catch (error) {
     console.error('❌ Error loading news:', error)
@@ -144,11 +188,37 @@ const loadNews = async () => {
 const loadCategories = async () => {
   try {
     categories.value = await categoryService.getAllCategories()
-    console.log('� Total categories loaded:', categories.value.length)
+    console.log('📂 Total categories loaded:', categories.value.length)
   } catch (error) {
     console.error('❌ Error loading categories:', error)
     categories.value = []
   }
+}
+
+const handleSearch = () => {
+  // Clear timeout cũ nếu có
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
+  
+  // Tạo timeout mới - chỉ gọi API sau 500ms khi người dùng ngừng nhập
+  searchTimeout = setTimeout(() => {
+    loadNews()
+  }, 500)
+}
+
+const clearSearch = () => {
+  // Clear timeout để tránh gọi API không cần thiết
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
+  searchQuery.value = ''
+  loadNews()
+}
+
+const selectCategory = (categoryId) => {
+  selectedCategory.value = categoryId
+  loadNews()
 }
 
 const viewNews = (id) => {
@@ -171,6 +241,13 @@ const truncateText = (text, length) => {
 onMounted(() => {
   loadNews()
   loadCategories()
+})
+
+onBeforeUnmount(() => {
+  // Clear timeout để tránh memory leak
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+  }
 })
 </script>
 
@@ -221,6 +298,74 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   color: rgba(255, 255, 255, 0.9);
+}
+
+/* Search Section */
+.search-section {
+  margin-bottom: 30px;
+  animation: slideUp 0.6s ease-out;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.search-box:focus-within {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+}
+
+.search-box svg {
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+.search-box input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: #333;
+}
+
+.search-box input::placeholder {
+  color: #999;
+}
+
+.clear-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #f5f7fa;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+
+.clear-btn:hover {
+  background: #667eea;
+  transform: scale(1.1);
+}
+
+.clear-btn:hover svg {
+  color: white;
+}
+
+.clear-btn svg {
+  color: #999;
+  transition: color 0.3s ease;
 }
 
 /* Filter Bar */
@@ -451,6 +596,23 @@ onMounted(() => {
 
   .hero-subtitle {
     font-size: 16px;
+  }
+
+  .search-box {
+    padding: 12px 16px;
+  }
+
+  .search-box input {
+    font-size: 14px;
+  }
+
+  .filter-bar {
+    gap: 8px;
+  }
+
+  .filter-btn {
+    padding: 8px 16px;
+    font-size: 13px;
   }
 
   .news-grid {
